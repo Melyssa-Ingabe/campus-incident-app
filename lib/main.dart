@@ -6,7 +6,7 @@ import 'providers/auth_provider.dart';
 import 'providers/incident_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/verify_email_screen.dart';
-import 'screens/home/home_screen.dart';
+import 'screens/main_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,8 +62,8 @@ class AuthGate extends StatelessWidget {
         return const LoginScreen();
       case AuthStatus.needsVerification:
         return const VerifyEmailScreen();
-      case AuthStatus.signedIn:
-        return const HomeScreen();
+            case AuthStatus.signedIn:
+        return const MainShell();
     }
   }
 }
