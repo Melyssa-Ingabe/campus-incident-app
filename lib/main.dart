@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
+import 'providers/incident_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/verify_email_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -20,8 +21,17 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, IncidentProvider>(
+          create: (_) => IncidentProvider(),
+          update: (_, auth, incidents) {
+            incidents!.updateUser(auth.appUser);
+            return incidents;
+          },
+        ),
+      ],
       child: MaterialApp(
         title: 'Campus Incident App',
         debugShowCheckedModeBanner: false,
