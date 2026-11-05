@@ -6,6 +6,7 @@ import '../../providers/incident_provider.dart';
 import '../../utils/incident_ui.dart';
 import '../../widgets/incident_card.dart';
 import '../../widgets/stat_tile.dart';
+import '../reports/incident_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onReport;
@@ -175,10 +176,18 @@ class HomeScreen extends StatelessWidget {
               ),
             )
           else
-            ...data.recent.map(
+                        ...data.recent.map(
               (incident) => IncidentCard(
                 incident: incident,
                 showReporter: auth.isStaff,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          IncidentDetailScreen(incidentId: incident.id),
+                    ),
+                  );
+                },
               ),
             ),
         ],
