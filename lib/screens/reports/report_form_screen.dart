@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../models/incident.dart';
 import '../../providers/incident_provider.dart';
+import '../../services/image_upload_service.dart';
 import '../../widgets/category_selector.dart';
 import '../../widgets/primary_button.dart';
 
@@ -30,11 +33,16 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _detailsCtrl = TextEditingController();
+  final _picker = ImagePicker();
+  final _uploader = ImageUploadService();
 
   IncidentCategory? _category;
   String? _location;
   bool _categoryError = false;
   bool _submitting = false;
+
+  XFile? _photo;
+  Uint8List? _photoBytes;
 
   @override
   void dispose() {
@@ -42,6 +50,56 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     _descCtrl.dispose();
     _detailsCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final file = await _picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 1280,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _photo = file;
+        _photoBytes = bytes;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the photo picker.')),
+      );
+    }
+  }
+
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -57,6 +115,18 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
+    String? photoUrl;
+    if (_photo != null) {
+      try {
+        photoUrl = await _uploader.upload(_photo!);
+      } on ImageUploadException catch (e) {
+        if (!mounted) return;
+        setState(() => _submitting = false);
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
+        return;
+      }
+    }
+
     final details = _detailsCtrl.text.trim();
     final location = details.isEmpty ? _location! : '${_location!} – $details';
 
@@ -65,6 +135,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       description: _descCtrl.text,
       category: _category!,
       location: location,
+      photoUrl: photoUrl,
     );
 
     if (!mounted) return;
@@ -153,8 +224,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                   maxLength: 500,
                   decoration: InputDecoration(
                     labelText: 'Description',
-                    hintText:
-                        'What happened, when, and what is the impact?',
+                    hintText: 'What happened, when, and what is the impact?',
                     alignLabelWithHint: true,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -172,7 +242,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _location,
+                  initialValue: _location,
                   decoration: InputDecoration(
                     labelText: 'Location',
                     prefixIcon: const Icon(Icons.location_on_outlined),
@@ -199,6 +269,67 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20),
+                Text(
+                  'Add a photo (optional)',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                if (_photoBytes == null)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _submitting ? null : _showPhotoOptions,
+                    child: Container(
+                      height: 110,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_a_photo_outlined),
+                          SizedBox(height: 6),
+                          Text('Tap to add a photo'),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          _photoBytes!,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: CircleAvatar(
+                          backgroundColor: Colors.black54,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            tooltip: 'Remove photo',
+                            onPressed: _submitting
+                                ? null
+                                : () => setState(() {
+                                      _photo = null;
+                                      _photoBytes = null;
+                                    }),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 const SizedBox(height: 24),
                 PrimaryButton(
                   label: 'Submit Report',
